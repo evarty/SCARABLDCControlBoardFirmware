@@ -22,32 +22,32 @@ void SixStepCommutation(uint32_t OnMax, uint32_t OffMax, uint32_t Direction, uin
 	//Direction == 1  --> AntiClockwise
 	if (Direction == 0)
 	{
-		if (!HallA && !HallB && HallC)//001
+		if ((HallA == 0) && (HallB == 0) && (HallC > 0))//001
 		{
 			REG_PIOD_SODR = (1<<HALLAUPPER) | (1<<HALLBLOWER);
 			//|+|-|float|
-		}else if (HallA && !HallB && HallC)//101
+		}else if ((HallA > 0) && (HallB == 0) && (HallC > 0))//101
 		{
 			REG_PIOD_SODR = (1<<HALLAUPPER) | (1<<HALLCLOWER);
 			//|+|float|-|
-		}else if (HallA && !HallB && !HallC)//100
+		}else if ((HallA > 0) && (HallB == 0) && (HallC == 0))//100
 		{
 			REG_PIOD_SODR = (1<<HALLBUPPER) | (1<<HALLCLOWER);
 			//|float|+|-|
-		}else if (HallA && HallB && !HallC)//110
+		}else if ((HallA > 0) && (HallB > 0) && (HallC == 0))//110
 		{
 			REG_PIOD_SODR = (1<<HALLALOWER) | (1<<HALLBUPPER);
 			//|-|+|float|
-		}else if (!HallA && HallB && !HallC)//010
+		}else if ((HallA == 0) && (HallB > 0) && (HallC == 0))//010
 		{
 			REG_PIOD_SODR = (1<<HALLALOWER) | (HALLCUPPER);
 			//|-|float|-|
-		}else if (HallA && !HallB && !HallC)//011
+		}else if ((HallA > 0) && (HallB == 0) && (HallC == 0))//011
 		{
 			REG_PIOD_SODR = (1<<HALLBLOWER) | (1<<HALLCUPPER);
 			//|float|-|+|
 		}
-	}else if (Direction)
+	}else if (Direction > 0)
 	{
 	}
 	/*
