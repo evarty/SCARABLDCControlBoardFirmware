@@ -19,6 +19,14 @@
 #define ENCODERRESOLUTION 2000
 #define PWMMAXVALUE 4800
 
+#define HALLAUPPER 24
+#define HALLALOWER 20
+#define HALLBUPPER 25
+#define HALLBLOWER 21
+#define HALLCUPPER 26
+#define HALLCLOWER 22
+
+
 //The provided Atmel headers have a weird error/omission regarding the PIO_ABCDSR registers.
 //They provide only a definition for PIO_ABCDSR1, but call it PIO_ABCDSR.
 //This bit here simply defines PIO_ABCDSR1 and PIO_ABCDSR2
@@ -39,7 +47,7 @@ int main(void)
 	//Following Process from datasheet section 29.15 Programming Sequence
 	//Write protection starts as 0, so no need to deal with that 
 	//Enable crystal oscillator
-	REG_CKGR_MOR |= CKGR_MOR_KEY(0x37) | CKGR_MOR_MOSCXTST_Msk | CKGR_MOR_MOSCXTEN;
+	REG_CKGR_MOR |= CKGR_MOR_KEY(0x37) | CKGR_MOR_MOSCXTEN;
 	//Wait for MOSCXTST field in PMC_SR to be set
 	while(!(REG_PMC_SR & PMC_SR_MOSCXTS));
 	//Switch the main clock to the external crystal
@@ -58,18 +66,18 @@ int main(void)
 	in 16 slow clock cycles. The crystal is three times
 	as fast as the slow clock. So, 16*3 = 48.
 	*/
-	if((REG_CKGR_MCFR & CKGR_MCFR_MAINF_Pos) < 45)
+	if((REG_CKGR_MCFR & 0x0000ffff) < 45)
 	{
 		REG_CKGR_MOR &= ~(CKGR_MOR_MOSCSEL);
+		return 1;
 	}
 	//At this point, the crystal is working and the main clock source
 	//but I want a faster clock, so, break out the PLL
 	
 	//Setup PLL
 	//Write the count register for the PLL setup time
-	REG_CKGR_PLLAR |= CKGR_PLLAR_PLLACOUNT(0x000F);
 	//Set PLL multiplier. multiplication value is this value + 1
-	REG_CKGR_PLLAR |= CKGR_PLLAR_MULA(0x0009) | CKGR_PLLAR_DIVA(0x0001);
+	REG_CKGR_PLLAR |= CKGR_PLLAR_PLLACOUNT(0x03F) | CKGR_PLLAR_MULA(0x009) | CKGR_PLLAR_DIVA(0x01);
 	//Wait for the LOCKA bit to be set
 	while(!(REG_PMC_SR & PMC_SR_LOCKA));
 	//Select the PLL as master clock, following datasheet
@@ -196,6 +204,7 @@ int main(void)
 	uint32_t HallB = 0;
 	uint32_t HallC = 0;
 	
+	
 	//Construct arrays of sine and cosine values. Memory heavy (like a quarter of the RAM), but should increase runtime speed.
 	static float SinArrayVar[ENCODERRESOLUTION];
 	for(uint32_t i = 0; i < ENCODERRESOLUTION; i++){
@@ -207,6 +216,26 @@ int main(void)
 	}
 	//SineArray(SinArrayVar ,ENCODERRESOLUTION);
 	//CosineArray(CosArrayVar ,ENCODERRESOLUTION);
+	
+	
+	//The motor driver needs to have its floating caps charged.
+	//So, the code will hold the bottom FETs on for a couple seconds
+	//to ensure this happens. 
+	//After this, the control will all be via PWM, so they shouldn't discharge
+	//Turn on lower FETs and turn off upper FETs
+	REG_PIOD_SODR = (1<<HALLALOWER) | (1<<HALLBLOWER) | (1<<HALLCLOWER);
+	REG_PIOD_CODR = (1<<HALLAUPPER) | (1<<HALLBUPPER) | (1<<HALLCUPPER);
+	//Busy wait loop. Yes its terrible. Don't care.
+	//Bootup time is not a concern for me.
+	for (volatile uint32_t i = 0; i < 45000;i++)
+	{
+	}
+	//Turn off all FETs
+	REG_PIOD_CODR = (1<<HALLALOWER) | (1<<HALLBLOWER) | (1<<HALLCLOWER);
+	REG_PIOD_CODR = (1<<HALLAUPPER) | (1<<HALLBUPPER) | (1<<HALLCUPPER);	
+	
+	
+	
 	
 	//This is the loop that will run when the motor just boots up.
 	//It has not yet caught the index, so the vector control won't work yet
@@ -222,16 +251,21 @@ int main(void)
 	REG_PIOA_PER |= PIO_PER_P7 | PIO_PER_P8;
 	REG_PIOD_ODR |= PIO_ODR_P30;
 	REG_PIOA_ODR |= PIO_ODR_P7 | PIO_ODR_P8;
-	while (!HasBeenIndex)
+	while (1)//!HasBeenIndex)
 	{
 		//Measure the Hall sensor outputs
 		HallA = (REG_PIOD_PDSR & PIO_PDSR_P30);
 		HallB = (REG_PIOA_PDSR & PIO_PDSR_P7);
 		HallC = (REG_PIOA_PDSR & PIO_PDSR_P8);
+
 		//Energize the windings in accordance with simple six step commutation
-		SixStepCommutation(000,000,0,HallA,HallB,HallC);
+		//if(REG_PIOD_ODSR & PIO_ODSR_P24){
+			SixStepCommutation(80,6,0,HallA,HallB,HallC);
+		//}
+					//REG_PIOD_SODR = (1<<HALLBLOWER) | (1<<HALLCLOWER) | (1<<HALLALOWER);
+					//REG_PIOD_CODR = (1<<HALLAUPPER) | (1<<HALLBUPPER) | (1<<HALLCUPPER);
 		//Check if the index has been passed.
-		HasBeenIndex = REG_TC0_CV1;
+		//HasBeenIndex = REG_TC0_CV1;
 	}
 	
 	
