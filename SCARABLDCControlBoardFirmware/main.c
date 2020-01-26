@@ -90,6 +90,8 @@ int main(void)
 	
 	
 	//Setup PIO
+	//Disable PIO write protection
+	REG_PIOA_WPMR = AFE_WPMR_WPKEY(0x50494F) | (0<<0);
 	//The encoder inputs are given to peripherals, so they are fine.
 	//The hall effect inputs need to be configured.
 	//Turn on PIO clock for all ?channels? I guess
@@ -106,6 +108,8 @@ int main(void)
 	REG_PIOA_PPDDR |= PIO_PPDDR_P0 | PIO_PPDDR_P1 | PIO_PPDDR_P2;
 	
 
+	//Disable PMC write protection
+	REG_PMC_WPMR = PMC_WPMR_WPKEY(0x504D43) | (0<<0);
 	
 	
 	//Setup the quadrature decoder
@@ -227,7 +231,7 @@ int main(void)
 	REG_PIOD_CODR = (1<<HALLAUPPER) | (1<<HALLBUPPER) | (1<<HALLCUPPER);
 	//Busy wait loop. Yes its terrible. Don't care.
 	//Bootup time is not a concern for me.
-	for (volatile uint32_t i = 0; i < 45000;i++)
+	for (volatile uint32_t i = 0; i < 4500;i++)
 	{
 	}
 	//Turn off all FETs
@@ -236,54 +240,24 @@ int main(void)
 	
 	
 	
-	
-	//This is the loop that will run when the motor just boots up.
-	//It has not yet caught the index, so the vector control won't work yet
-	//This loop just runs the motor very slowly using 6 step commutation using the Hall sensors
-	//Set output pins to be output
-	REG_PIOD_PER |= PIO_PER_P20 | PIO_PER_P21 | PIO_PER_P22 | PIO_PER_P24 | PIO_PER_P25 | PIO_PER_P26;
-	REG_PIOD_OER |= PIO_OER_P20 | PIO_OER_P21 | PIO_OER_P22 | PIO_OER_P24 | PIO_OER_P25 | PIO_OER_P26;
-	//Set the Hall  Pins to be inputs. See diagram. 
-	//HallA is connected to PD30.
-	//HallB is connected to PA07.
-	//HallC is connected to PA08.
-	REG_PIOD_PER |= PIO_PER_P30;
-	REG_PIOA_PER |= PIO_PER_P7 | PIO_PER_P8;
-	REG_PIOD_ODR |= PIO_ODR_P30;
-	REG_PIOA_ODR |= PIO_ODR_P7 | PIO_ODR_P8;
-	while (1)//!HasBeenIndex)
-	{
-		//Measure the Hall sensor outputs
-		HallA = (REG_PIOD_PDSR & PIO_PDSR_P30);
-		HallB = (REG_PIOA_PDSR & PIO_PDSR_P7);
-		HallC = (REG_PIOA_PDSR & PIO_PDSR_P8);
-
-		//Energize the windings in accordance with simple six step commutation
-		//if(REG_PIOD_ODSR & PIO_ODSR_P24){
-			SixStepCommutation(80,6,0,HallA,HallB,HallC);
-		//}
-					//REG_PIOD_SODR = (1<<HALLBLOWER) | (1<<HALLCLOWER) | (1<<HALLALOWER);
-					//REG_PIOD_CODR = (1<<HALLAUPPER) | (1<<HALLBUPPER) | (1<<HALLCUPPER);
-		//Check if the index has been passed.
-		//HasBeenIndex = REG_TC0_CV1;
-	}
-	
-	
-	//Putting PWM setup code below the six step section so that the pins are not given to the peripheral
-	
 	//Set up PWM
 	//Need to do PIO stuff for PWM enabling and activate the peripheral clock
 	//Give the relevant pins to the PWM peripheral. (PIO stuff)
-	REG_PIOD_ABCDSR1 |= PIO_ABCDSR_P20 | PIO_ABCDSR_P21 | PIO_ABCDSR_P22 | PIO_ABCDSR_P24 | PIO_ABCDSR_P25 | PIO_ABCDSR_P26;
+	//Commenting out because this will be dealt with in the six step commutation bit. Then again later when FOC boots up.
+	REG_PIOD_ABCDSR1 |= (0<<20) | (0<<21) | (0<<22) | (0<<24) | (0<<25) | (0<<26);
+	REG_PIOD_PDR = 0;
 	//Active the PWM clocks (PMC stuff)
 	REG_PMC_PCER1 |= PMC_PCER1_PID36;
+	REG_PMC_PCER0 | PMC_PCER0_PID21 | PMC_PCER0_PID22 | PMC_PCER0_PID23;
 	//Following steps in the datasheet 39.6.5.1
 	//Disable write protection of PWM registers
 	REG_PWM_WPCR = PWM_WPCR_WPKEY(0x50574D) | PWM_WPCR_WPCMD(0x0);
 	//Configure clock generator
 	//Select CLKA clock. Set PREA clock to be the peripheral clock
 	//Don't actually need this
-	//REG_PWM_CLK |= PWM_CLK_DIVA(1) | PWM_CLK_PREA(0);
+	REG_PWM_CLK |= PWM_CLK_DIVA(1) | PWM_CLK_PREA(0);
+	//Enable PWM output
+	REG_PWM_ENA = PWM_ENA_CHID0 | PWM_ENA_CHID1 | PWM_ENA_CHID2;
 	//Select the clock for each channel. Will use CLKA dealt with just above.
 	//Also set the alignment, polarity, deadtime, update type, event selection
 	//Set for no deadtime, the FET driver will take care of that.
@@ -295,18 +269,56 @@ int main(void)
 	//Set period of PWM
 	//At 24 V, 4800 give me a resolution of 5 mV
 	//I am going to assert this is enough
-	REG_PWM_CPRD0 = PWMMAXVALUE;
-	REG_PWM_CPRD1 = PWMMAXVALUE;
-	REG_PWM_CPRD2 = PWMMAXVALUE;
+	REG_PWM_CPRDUPD0 = PWMMAXVALUE;
+	REG_PWM_CPRDUPD1 = PWMMAXVALUE;
+	REG_PWM_CPRDUPD2 = PWMMAXVALUE;
 	//Init the duty cycle at 0
-	REG_PWM_CDTY0 = 0;
-	REG_PWM_CDTY1 = 0;
-	REG_PWM_CDTY2 = 0;
+	REG_PWM_CDTYUPD0 = 0;
+	REG_PWM_CDTYUPD1 = 2400;
+	REG_PWM_CDTYUPD2 = 2400;
 	//Sync channels 1 and 2 to channel 0
 	//Also set update method. Default is manual update, so that's fine
 	REG_PWM_SCM |= PWM_SCM_SYNC0 | PWM_SCM_SYNC1 | PWM_SCM_SYNC2;
+	//Update control registers
+	REG_PWM_SCUC |= (1<<0);
 	//Enable the interrupt channels. Might need them
-	REG_PWM_ENA |= PWM_ENA_CHID0 | PWM_ENA_CHID1 | PWM_ENA_CHID2;
+	//REG_PWM_ENA |= PWM_ENA_CHID0 | PWM_ENA_CHID1 | PWM_ENA_CHID2;
+	
+	
+		//This is the loop that will run when the motor just boots up.
+		//It has not yet caught the index, so the vector control won't work yet
+		//This loop just runs the motor very slowly using 6 step commutation using the Hall sensors
+		//Set output pins to be output
+		//REG_PIOD_PER |= PIO_PER_P20 | PIO_PER_P21 | PIO_PER_P22 | PIO_PER_P24 | PIO_PER_P25 | PIO_PER_P26;
+		//REG_PIOD_OER |= PIO_OER_P20 | PIO_OER_P21 | PIO_OER_P22 | PIO_OER_P24 | PIO_OER_P25 | PIO_OER_P26;
+		//Set the Hall  Pins to be inputs. See diagram.
+		//HallA is connected to PD30.
+		//HallB is connected to PA07.
+		//HallC is connected to PA08.
+		REG_PIOD_PER |= PIO_PER_P30;
+		REG_PIOA_PER |= PIO_PER_P7 | PIO_PER_P8;
+		REG_PIOD_ODR |= PIO_ODR_P30;
+		REG_PIOA_ODR |= PIO_ODR_P7 | PIO_ODR_P8;
+		while (1)//!HasBeenIndex)
+		{
+			//Measure the Hall sensor outputs
+			HallA = (REG_PIOD_PDSR & PIO_PDSR_P30);
+			HallB = (REG_PIOA_PDSR & PIO_PDSR_P7);
+			HallC = (REG_PIOA_PDSR & PIO_PDSR_P8);
+
+			//Energize the windings in accordance with simple six step commutation
+			//if(REG_PIOD_ODSR & PIO_ODSR_P24){
+			
+			
+			//SixStepCommutation(80,6,0,HallA,HallB,HallC);
+			
+			
+			//}
+			//REG_PIOD_SODR = (1<<HALLBLOWER) | (1<<HALLCLOWER) | (1<<HALLALOWER);
+			//REG_PIOD_CODR = (1<<HALLAUPPER) | (1<<HALLBUPPER) | (1<<HALLCUPPER);
+			//Check if the index has been passed.
+			//HasBeenIndex = REG_TC0_CV1;
+		}
 	
 	
 	

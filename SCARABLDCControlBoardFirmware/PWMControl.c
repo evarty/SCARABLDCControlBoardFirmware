@@ -8,6 +8,8 @@ void UpdateOutputPWMDutyCycles(uint32_t PWMValues[])
 	//This is non-ideal, but the polarity needs to change a lot and this chip doesn't have enough independent
 	//PWM channels to control each one by itself, so I'm using the complementary pairs.
 	//This should probably be called by an interrupt when the counter hits 0.
+	
+	
 	//Because I need to adjust the polarity a lot, this actually disables the PWM, sets the polarity and duty cycles, then re-enables them
 	//Disable synced PWM channels
 	REG_PWM_ENA = 0x0;
