@@ -238,8 +238,8 @@ int main(void)
 	REG_PIOD_CODR = (1<<HALLALOWER) | (1<<HALLBLOWER) | (1<<HALLCLOWER);
 	REG_PIOD_CODR = (1<<HALLAUPPER) | (1<<HALLBUPPER) | (1<<HALLCUPPER);	
 	
-	
-	
+	PWMSetup();
+	/*
 	//Set up PWM
 	//Need to do PIO stuff for PWM enabling and activate the peripheral clock
 	//Give the relevant pins to the PWM peripheral. (PIO stuff)
@@ -284,6 +284,7 @@ int main(void)
 	//Enable the interrupt channels. Might need them
 	//REG_PWM_ENA |= PWM_ENA_CHID0 | PWM_ENA_CHID1 | PWM_ENA_CHID2;
 	
+	*/
 	
 		//This is the loop that will run when the motor just boots up.
 		//It has not yet caught the index, so the vector control won't work yet
@@ -295,10 +296,12 @@ int main(void)
 		//HallA is connected to PD30.
 		//HallB is connected to PA07.
 		//HallC is connected to PA08.
+	/*
 		REG_PIOD_PER |= PIO_PER_P30;
 		REG_PIOA_PER |= PIO_PER_P7 | PIO_PER_P8;
 		REG_PIOD_ODR |= PIO_ODR_P30;
 		REG_PIOA_ODR |= PIO_ODR_P7 | PIO_ODR_P8;
+		*/
 		while (1)//!HasBeenIndex)
 		{
 			//Measure the Hall sensor outputs
