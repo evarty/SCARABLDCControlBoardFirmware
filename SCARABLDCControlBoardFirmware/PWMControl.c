@@ -1,5 +1,12 @@
 #include "sam.h"
 
+//The provided Atmel headers have a weird error/omission regarding the PIO_ABCDSR registers.
+//They provide only a definition for PIO_ABCDSR1, but call it PIO_ABCDSR.
+//This bit here simply defines PIO_ABCDSR1 and PIO_ABCDSR2
+#define REG_PIOA_ABCDSR1 (*(__IO uint32_t*)0x400E0E70U)
+#define REG_PIOA_ABCDSR2 (*(__IO uint32_t*)0x400E0E74U)
+#define REG_PIOD_ABCDSR1 (*(__IO uint32_t*)0x400E1470U)
+
 void UpdateOutputPWMDutyCycles(uint32_t PWMValues[])
 {
 	
@@ -34,20 +41,17 @@ void PWMSetup(){
 	//Need to do PIO stuff for PWM enabling and activate the peripheral clock
 	//Give the relevant pins to the PWM peripheral. (PIO stuff)
 	REG_PIOD_ABCDSR1 |= (0<<20) | (0<<21) | (0<<22) | (0<<24) | (0<<25) | (0<<26);
-	REG_PIOD_PDR = 0;
+	REG_PIOD_PDR = 0xFFFFFFFF;
 	//Active the PWM clocks (PMC stuff)
 	REG_PMC_PCER1 |= PMC_PCER1_PID36;
-	REG_PMC_PCER0 | PMC_PCER0_PID21 | PMC_PCER0_PID22 | PMC_PCER0_PID23;
+	REG_PMC_PCER0 |= PMC_PCER0_PID21 | PMC_PCER0_PID22 | PMC_PCER0_PID23;
 	
 	//Following steps in the datasheet 39.6.5.1
 	//Disable write protection of PWM registers
 	REG_PWM_WPCR = PWM_WPCR_WPKEY(0x50574D) | PWM_WPCR_WPCMD(0x0U);
 	
-	//Configure clock generator
-	//Select CLKA clock. Set PREA clock to be the peripheral clock
-	REG_PWM_CLK |= PWM_CLK_DIVA(1) | PWM_CLK_PREA(0);
 	
-	//Select the clock for each channel. Will use CLKA dealt with just above.
+	//Select the clock 
 	//Also set the alignment, polarity, deadtime, update type, event selection
 	//Set for no deadtime, the FET driver will take care of that.
 	//Register starts at zero, so CPOL bit doesn't need to change. CES also should be 0.
@@ -60,13 +64,13 @@ void PWMSetup(){
 	
 	
 	//Init the duty cycle at 0
-	REG_PWM_CDTY0 = 2400;
-	REG_PWM_CDTY1 = 2400;
-	REG_PWM_CDTY2 = 2400;
+	REG_PWM_CDTY0 = 1200;
+	REG_PWM_CDTY1 = 1200;
+	REG_PWM_CDTY2 = 1200;
 	
 	//From 39.6.2.9 for synchronous channels
-	REG_PWM_SCM |= REG_PWM_SYNC0 | REG_PWM_SYNC1 | REG_PWM_SYNC2;
-	REG_PWM_SCM &= ~(PWM_SCM_UPDM);
+	REG_PWM_SCM = (PWM_SCM_UPDM_MODE0);
+	REG_PWM_SCM |= PWM_SCM_SYNC0 | PWM_SCM_SYNC1 | PWM_SCM_SYNC2;
 	//Don't need to change PWM_SCUP at all
 	
 	

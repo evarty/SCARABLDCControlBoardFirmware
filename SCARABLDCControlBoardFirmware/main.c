@@ -77,7 +77,7 @@ int main(void)
 	//Setup PLL
 	//Write the count register for the PLL setup time
 	//Set PLL multiplier. multiplication value is this value + 1
-	REG_CKGR_PLLAR |= CKGR_PLLAR_PLLACOUNT(0x03F) | CKGR_PLLAR_MULA(0x009) | CKGR_PLLAR_DIVA(0x01);
+	REG_CKGR_PLLAR |= CKGR_PLLAR_PLLACOUNT(0x03F) | CKGR_PLLAR_MULA(0x009) | CKGR_PLLAR_DIVA(0x01) | (1<<29);
 	//Wait for the LOCKA bit to be set
 	while(!(REG_PMC_SR & PMC_SR_LOCKA));
 	//Select the PLL as master clock, following datasheet
@@ -87,6 +87,12 @@ int main(void)
 	while(!(REG_PMC_SR & PMC_SR_MCKRDY));
 	//At this point the master clock is the PLL
 	//which is (9 + 1)*12 MHz = 120 MHz.
+	while(!(REG_CKGR_MCFR & CKGR_MCFR_MAINFRDY))
+	if((REG_CKGR_MCFR & 0x0000ffff) < 1870)
+	{
+		REG_CKGR_MOR &= ~(CKGR_MOR_MOSCSEL);
+		return 1;
+	}
 	
 	
 	//Setup PIO
