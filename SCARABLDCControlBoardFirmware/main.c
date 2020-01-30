@@ -66,7 +66,7 @@ int main(void)
 	in 16 slow clock cycles. The crystal is three times
 	as fast as the slow clock. So, 16*3 = 48.
 	*/
-	if((REG_CKGR_MCFR & 0x0000ffff) < 45)
+	if((REG_CKGR_MCFR & 0x0000ffff) < 5800)
 	{
 		REG_CKGR_MOR &= ~(CKGR_MOR_MOSCSEL);
 		return 1;
@@ -88,7 +88,7 @@ int main(void)
 	//At this point the master clock is the PLL
 	//which is (9 + 1)*12 MHz = 120 MHz.
 	while(!(REG_CKGR_MCFR & CKGR_MCFR_MAINFRDY))
-	if((REG_CKGR_MCFR & 0x0000ffff) < 1870)
+	if((REG_CKGR_MCFR & 0x0000ffff) < 58000)
 	{
 		REG_CKGR_MOR &= ~(CKGR_MOR_MOSCSEL);
 		return 1;
