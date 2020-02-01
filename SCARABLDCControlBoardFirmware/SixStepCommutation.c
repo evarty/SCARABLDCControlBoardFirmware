@@ -37,11 +37,15 @@ void SixStepCommutation(uint32_t OnMax, uint32_t OffMax, uint32_t Direction, uin
 			//In this case, we want Cupper, Clower, and Blower, to be controlled by the PWM.
 			//The rest are GPIO
 			REG_PIOD_ABCDSR1 |= PIO_ABCDSR_P21 | PIO_ABCDSR_P22 | PIO_ABCDSR_P26;
+			REG_PIOD_PER |= PIO_PER_P25 | PIO_PER_P20 | PIO_PER_P24;
+			REG_PIOD_PDR |= PIO_PDR_P22 | PIO_PDR_P26 | PIO_PDR_P21;
 			
 			//Now, set the duty cycle for both C and B (W and V) to be pretty low, probs 15%.
-			REG_PWM_CDTY0 = 720;
-			REG_PWM_CDTY1 = 720;
-			REG_PWM_CDTY2 = 720;
+			REG_PWM_CDTYUPD0 = 0;
+			REG_PWM_CDTYUPD1 = 720;
+			REG_PWM_CDTYUPD2 = 720;
+			
+			REG_PWM_SCUC = PWM_SCUC_UPDULOCK;
 			
 			//REG_PIOD_SODR = (1<<HALLCUPPER) | (1<<HALLBLOWER);
 			REG_PIOD_CODR = (1<<HALLALOWER) | (1<<HALLBUPPER) |(1<<HALLAUPPER);// | (1<<HALLCLOWER);

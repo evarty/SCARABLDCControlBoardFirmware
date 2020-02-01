@@ -56,7 +56,7 @@ int main(void)
 	while(!(REG_PMC_SR & PMC_SR_MOSCSELS));
 	//Check the clock frequency
 	//Wait for check to be available
-	while(!(REG_CKGR_MCFR & CKGR_MCFR_MAINFRDY))
+	while(!(REG_CKGR_MCFR & CKGR_MCFR_MAINFRDY));
 	/*
 	Check if the crystal is doing anything, 
 	in particular, if it is close to the correct frequency,
@@ -66,7 +66,9 @@ int main(void)
 	in 16 slow clock cycles. The crystal is three times
 	as fast as the slow clock. So, 16*3 = 48.
 	*/
-	if((REG_CKGR_MCFR & 0x0000ffff) < 5800)
+	uint32_t MainFrequencyCheckVariable = 0x0u;
+	MainFrequencyCheckVariable = REG_CKGR_MCFR & CKGR_MCFR_MAINF_Msk;
+	if(MainFrequencyCheckVariable<5800)
 	{
 		REG_CKGR_MOR &= ~(CKGR_MOR_MOSCSEL);
 		return 1;
@@ -77,7 +79,7 @@ int main(void)
 	//Setup PLL
 	//Write the count register for the PLL setup time
 	//Set PLL multiplier. multiplication value is this value + 1
-	REG_CKGR_PLLAR |= CKGR_PLLAR_PLLACOUNT(0x03F) | CKGR_PLLAR_MULA(0x009) | CKGR_PLLAR_DIVA(0x01) | (1<<29);
+	REG_CKGR_PLLAR = CKGR_PLLAR_PLLACOUNT(0x03F) | CKGR_PLLAR_MULA(0x019) | CKGR_PLLAR_DIVA(0x01) | (1<<29);
 	//Wait for the LOCKA bit to be set
 	while(!(REG_PMC_SR & PMC_SR_LOCKA));
 	//Select the PLL as master clock, following datasheet
@@ -87,13 +89,15 @@ int main(void)
 	while(!(REG_PMC_SR & PMC_SR_MCKRDY));
 	//At this point the master clock is the PLL
 	//which is (9 + 1)*12 MHz = 120 MHz.
-	while(!(REG_CKGR_MCFR & CKGR_MCFR_MAINFRDY))
-	if((REG_CKGR_MCFR & 0x0000ffff) < 58000)
+	while(!(REG_CKGR_MCFR & CKGR_MCFR_MAINFRDY));
+	/*
+	MainFrequencyCheckVariable = REG_CKGR_MCFR & CKGR_MCFR_MAINF_Msk;
+	if(MainFrequencyCheckVariable < 58000)
 	{
 		REG_CKGR_MOR &= ~(CKGR_MOR_MOSCSEL);
 		return 1;
 	}
-	
+	*/
 	
 	//Setup PIO
 	//Disable PIO write protection
@@ -319,7 +323,7 @@ int main(void)
 			//if(REG_PIOD_ODSR & PIO_ODSR_P24){
 			
 			
-			//SixStepCommutation(80,6,0,HallA,HallB,HallC);
+			SixStepCommutation(80,6,0,HallA,HallB,HallC);
 			
 			
 			//}

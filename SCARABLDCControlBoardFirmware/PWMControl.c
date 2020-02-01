@@ -52,6 +52,7 @@ void PWMSetup(){
 	
 	
 	//Select the clock 
+	//REG_PWM_CLK = PWM_CLK_PREA(4) | PWM_CLK_DIVA(1);
 	//Also set the alignment, polarity, deadtime, update type, event selection
 	//Set for no deadtime, the FET driver will take care of that.
 	//Register starts at zero, so CPOL bit doesn't need to change. CES also should be 0.
@@ -64,9 +65,9 @@ void PWMSetup(){
 	
 	
 	//Init the duty cycle at 0
-	REG_PWM_CDTY0 = 1200;
-	REG_PWM_CDTY1 = 1200;
-	REG_PWM_CDTY2 = 1200;
+	REG_PWM_CDTY0 = 0;
+	REG_PWM_CDTY1 = 0;
+	REG_PWM_CDTY2 = 0;
 	
 	//From 39.6.2.9 for synchronous channels
 	REG_PWM_SCM = (PWM_SCM_UPDM_MODE0);
