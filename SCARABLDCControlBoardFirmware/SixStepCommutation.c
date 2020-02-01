@@ -1,10 +1,15 @@
 #include "sam.h"
-#define HALLAUPPER 24
-#define HALLALOWER 20
-#define HALLBUPPER 25
-#define HALLBLOWER 21
-#define HALLCUPPER 26
-#define HALLCLOWER 22
+
+//ABSOLUTELY NEED TO ADJUST THE PCB TO BE THE OPPOSITE OF THIS
+//THESE CURRENT DEFINITIONS ARE OPPOSITE OF THE INTERNAL PWM HIGH AND LOW OUTPUT
+//OBVIOUSLY IT CAN BE MADE TO WORK, BUT IT'S JUST ONE MORE THING TO REMEMBER
+//EASIER TO JUST NOT DO THAT
+#define U_UPPER_OUTPUT 20//PWM channel 0
+#define U_LOWER_OUTPUT 24
+#define V_UPPER_OUTPUT 21//PWM channel 1
+#define V_LOWER_OUTPUT 25
+#define W_UPPER_OUTPUT 22//PWM channel 2
+#define W_LOWER_OUTPUT 26
 
 //The provided Atmel headers have a weird error/omission regarding the PIO_ABCDSR registers.
 //They provide only a definition for PIO_ABCDSR1, but call it PIO_ABCDSR.
@@ -23,8 +28,13 @@ void SixStepCommutation(uint32_t OnMax, uint32_t OffMax, uint32_t Direction, uin
 	//All other pins will be given/left with the PIO for GPIO control
 	//The high pins will be synchronized to Counter0
 	
+	//For PWM complementary outputs:
+	//When non-inverted (CPOL=0), LOW OUTPUT has the defined duty cycle, and HIGH OUTPUT has 1-duty cycle
+	//When inverted (CPOL=1), LOW OUTPUT has 1-duty cycle, and HIGH OUTPUT has the defined duty cycle
+	//What this means for this function is that the pins controlling the (-) output should be non-inverted
+	//and the pins controlling the (+) output should be inverted
 	
-	
+	REG_PIOD_OER = 0xFFFFFFFF;
 	//pick which outputs to turn on
 	//Direction == 0  --> Clockwise
 	//Direction == 1  --> AntiClockwise
@@ -36,59 +46,163 @@ void SixStepCommutation(uint32_t OnMax, uint32_t OffMax, uint32_t Direction, uin
 			//This register controls which pins are controlled by the PWM.
 			//In this case, we want Cupper, Clower, and Blower, to be controlled by the PWM.
 			//The rest are GPIO
-			REG_PIOD_ABCDSR1 |= PIO_ABCDSR_P21 | PIO_ABCDSR_P22 | PIO_ABCDSR_P26;
-			REG_PIOD_PER |= PIO_PER_P25 | PIO_PER_P20 | PIO_PER_P24;
-			REG_PIOD_PDR |= PIO_PDR_P22 | PIO_PDR_P26 | PIO_PDR_P21;
+			REG_PIOD_ABCDSR1 |= (1<<V_LOWER_OUTPUT) | (1<<W_LOWER_OUTPUT) | (1<<W_UPPER_OUTPUT);
+			REG_PIOD_PER |= (1<<V_UPPER_OUTPUT) | (1<<U_UPPER_OUTPUT) | (1<<U_LOWER_OUTPUT);
+			REG_PIOD_PDR |= (1<<W_UPPER_OUTPUT) | (1<<W_LOWER_OUTPUT) | (1<<V_LOWER_OUTPUT);
 			
-			//Now, set the duty cycle for both C and B (W and V) to be pretty low, probs 15%.
-			REG_PWM_CDTYUPD0 = 0;
-			REG_PWM_CDTYUPD1 = 720;
-			REG_PWM_CDTYUPD2 = 720;
-			
-			REG_PWM_SCUC = PWM_SCUC_UPDULOCK;
+			//Disable PWM because polarity needs to be adjusted
+			REG_PWM_DIS |= PWM_DIS_CHID0;
+			//Set needed polarities. Setting all of them so I don't need to keep track.
+			REG_PWM_CMR0 &= ~(PWM_CMR_CPOL);//U Output non-inverted
+			REG_PWM_CMR1 &= ~(PWM_CMR_CPOL);//V Output non-inverted
+			REG_PWM_CMR2 |= PWM_CMR_CPOL;//W Output inverted
+			//Now, set the duty cycle for both W and V to be pretty low, probs 15%.
+			//Not using the update registers since the PWM is disabled above.
+			REG_PWM_CDTY0 = 720;
+			REG_PWM_CDTY1 = 720;
+			REG_PWM_CDTY2 = 720;
+			//REG_PWM_SCUC = PWM_SCUC_UPDULOCK;
+			//Enable PWM
+			REG_PWM_ENA |= PWM_ENA_CHID0;
 			
 			//REG_PIOD_SODR = (1<<HALLCUPPER) | (1<<HALLBLOWER);
-			REG_PIOD_CODR = (1<<HALLALOWER) | (1<<HALLBUPPER) |(1<<HALLAUPPER);// | (1<<HALLCLOWER);
-			//|+|-|float|
+			//REG_PIOD_OER |= (1<<U_LOWER_OUTPUT) | (1<<V_UPPER_OUTPUT) |(1<<U_UPPER_OUTPUT);
+			REG_PIOD_CODR |= (1<<U_LOWER_OUTPUT) | (1<<V_UPPER_OUTPUT) |(1<<U_UPPER_OUTPUT);
+			//|float|-|+|
 		}else if ((HallA > 0) && (HallB == 0) && (HallC > 0))//101
 		{
-			REG_PIOD_SODR = (1<<HALLAUPPER) | (1<<HALLBLOWER);
-			REG_PIOD_CODR = (1<<HALLALOWER) | (1<<HALLCUPPER) | (1<<HALLBUPPER) | (1<<HALLCLOWER);
-			//|+|float|-|
+			//Need Aupper, Alower, and Blower to be controlled by PWM
+			REG_PIOD_ABCDSR1 |= (1<<U_UPPER_OUTPUT) | (1<<U_LOWER_OUTPUT) | (1<<V_LOWER_OUTPUT);
+			REG_PIOD_PER |= (1<<V_UPPER_OUTPUT) | (1<<W_LOWER_OUTPUT) | (1<<W_UPPER_OUTPUT);
+			REG_PIOD_PDR |= (1<<U_UPPER_OUTPUT) | (1<<U_LOWER_OUTPUT) | (1<<V_LOWER_OUTPUT);
+			
+			//Disable PWM because polarity needs to be adjusted
+			REG_PWM_DIS |= PWM_DIS_CHID0;
+			//Set needed polarities. Setting all of them so I don't need to keep track.
+			REG_PWM_CMR0 |= (PWM_CMR_CPOL);
+			REG_PWM_CMR1 &= ~(PWM_CMR_CPOL);
+			REG_PWM_CMR2 &= ~(PWM_CMR_CPOL);
+			//Now, set the duty cycle to be pretty low, probs 15%.
+			REG_PWM_CDTY0 = 720;
+			REG_PWM_CDTY1 = 720;
+			REG_PWM_CDTY2 = 720;
+			//REG_PWM_SCUC = PWM_SCUC_UPDULOCK;
+			//Enable PWM
+			REG_PWM_ENA |= PWM_ENA_CHID0;
+			
+			//REG_PIOD_SODR = (1<<HALLAUPPER) | (1<<HALLBLOWER);
+			REG_PIOD_CODR =  (1<<W_UPPER_OUTPUT) | (1<<V_UPPER_OUTPUT) | (1<<W_LOWER_OUTPUT);
+			//|+|-|float|
 		}else if ((HallA > 0) && (HallB == 0) && (HallC == 0))//100
 		{
-			REG_PIOD_SODR = (1<<HALLAUPPER) | (1<<HALLCLOWER);
-			REG_PIOD_CODR = (1<<HALLBLOWER) | (1<<HALLCUPPER) | (1<<HALLBUPPER) | (1<<HALLALOWER);
-			//|float|+|-|
+			//Need Aupper, Alower, and Clower to be PWM
+			REG_PIOD_ABCDSR1 |= (1<<U_UPPER_OUTPUT) | (1<<U_LOWER_OUTPUT) | (1<<W_LOWER_OUTPUT);
+			REG_PIOD_PER |= (1<<V_UPPER_OUTPUT) | (1<<V_LOWER_OUTPUT) | (1<<W_UPPER_OUTPUT);
+			REG_PIOD_PDR |= (1<<U_UPPER_OUTPUT) | (1<<U_LOWER_OUTPUT) | (1<<W_LOWER_OUTPUT);
+			
+			//Disable PWM because polarity needs to be adjusted
+			REG_PWM_DIS |= PWM_DIS_CHID0;
+			//Set needed polarities. Setting all of them so I don't need to keep track.
+			REG_PWM_CMR0 |= (PWM_CMR_CPOL);
+			REG_PWM_CMR1 &= ~(PWM_CMR_CPOL);
+			REG_PWM_CMR2 &= ~(PWM_CMR_CPOL);
+			//Now, set the duty cycle to be pretty low, probs 15%.
+			REG_PWM_CDTY0 = 720;
+			REG_PWM_CDTY1 = 720;
+			REG_PWM_CDTY2 = 720;		
+			//REG_PWM_SCUC = PWM_SCUC_UPDULOCK;
+			//Enable PWM
+			REG_PWM_ENA |= PWM_ENA_CHID0;
+			
+			//REG_PIOD_SODR = (1<<A_UPPER_OUTPUT) | (1<<C_LOWER_OUTPUT);
+			REG_PIOD_CODR = (1<<V_LOWER_OUTPUT) | (1<<W_UPPER_OUTPUT) | (1<<V_UPPER_OUTPUT);
+			//|+|float|-|
 		}else if ((HallA > 0) && (HallB > 0) && (HallC == 0))//110
 		{
-			REG_PIOD_SODR = (1<<HALLCLOWER) | (1<<HALLBUPPER);
-			REG_PIOD_CODR = (1<<HALLAUPPER) | (1<<HALLBLOWER) | (1<<HALLCUPPER) | (1<<HALLALOWER);
-			//|-|+|float|
+			//Need Bupper, Blower, and Clower to be PWM
+			REG_PIOD_ABCDSR1 |= (1<<V_UPPER_OUTPUT) | (1<<V_LOWER_OUTPUT) | (1<<W_LOWER_OUTPUT);
+			REG_PIOD_PER |= (1<<U_UPPER_OUTPUT) | (1<<U_LOWER_OUTPUT) | (1<<W_UPPER_OUTPUT);
+			REG_PIOD_PDR |= (1<<V_UPPER_OUTPUT) | (1<<V_LOWER_OUTPUT) | (1<<W_LOWER_OUTPUT);
+			
+			//Disable PWM because polarity needs to be adjusted
+			REG_PWM_DIS |= PWM_DIS_CHID0;
+			//Set needed polarities. Setting all of them so I don't need to keep track.
+			REG_PWM_CMR0 &= ~(PWM_CMR_CPOL);
+			REG_PWM_CMR1 |= (PWM_CMR_CPOL);
+			REG_PWM_CMR2 &= ~(PWM_CMR_CPOL);
+			//Now, set the duty cycle to be pretty low, probs 15%.
+			REG_PWM_CDTY0 = 720;
+			REG_PWM_CDTY1 = 720;
+			REG_PWM_CDTY2 = 720;
+			//REG_PWM_SCUC = PWM_SCUC_UPDULOCK;	
+			//Enable PWM
+			REG_PWM_ENA |= PWM_ENA_CHID0;		
+			
+			//REG_PIOD_SODR = (1<<C_LOWER_OUTPUT) | (1<<B_UPPER_OUTPUT);
+			REG_PIOD_CODR = (1<<U_UPPER_OUTPUT) | (1<<V_LOWER_OUTPUT) | (1<<U_LOWER_OUTPUT);
+			//|float|+|-|
 		}else if ((HallA == 0) && (HallB > 0) && (HallC == 0))//010
 		{
-			REG_PIOD_SODR = (1<<HALLALOWER) | (HALLBUPPER);
-			REG_PIOD_CODR = (1<<HALLAUPPER) | (1<<HALLCLOWER) | (1<<HALLCUPPER) | (1<<HALLBLOWER);
-			//|-|float|-|
+			//Need Bupper, Blower, and Alower to be PWM
+			REG_PIOD_ABCDSR1 |= (1<<V_UPPER_OUTPUT) | (1<<V_LOWER_OUTPUT) | (1<<U_LOWER_OUTPUT);
+			REG_PIOD_PER |= (1<<U_UPPER_OUTPUT) | (1<<W_UPPER_OUTPUT) | (1<<W_LOWER_OUTPUT);
+			REG_PIOD_PDR |= (1<<V_UPPER_OUTPUT) | (1<<V_LOWER_OUTPUT) | (1<<U_LOWER_OUTPUT);
+
+			//Disable PWM because polarity needs to be adjusted
+			REG_PWM_DIS |= PWM_DIS_CHID0;
+			//Set needed polarities. Setting all of them so I don't need to keep track.
+			REG_PWM_CMR0 &= ~(PWM_CMR_CPOL);
+			REG_PWM_CMR1 |= (PWM_CMR_CPOL);
+			REG_PWM_CMR2 &= ~(PWM_CMR_CPOL);
+			//Now, set the duty cycle to be pretty low, probs 15%.
+			REG_PWM_CDTY0 = 720;
+			REG_PWM_CDTY1 = 720;
+			REG_PWM_CDTY2 = 720;
+			//REG_PWM_SCUC = PWM_SCUC_UPDULOCK;	
+			//Enable PWM
+			REG_PWM_ENA |= PWM_ENA_CHID0;		
+			
+			//REG_PIOD_SODR = (1<<A_LOWER_OUTPUT) | (B_UPPER_OUTPUT);
+			REG_PIOD_CODR = (1<<U_UPPER_OUTPUT) | (1<<W_LOWER_OUTPUT) | (1<<W_UPPER_OUTPUT);
+			//|-|+|float|
 		}else if ((HallA == 0) && (HallB > 0) && (HallC > 0))//011
 		{
-			REG_PIOD_SODR = (1<<HALLALOWER) | (1<<HALLCUPPER);
-			REG_PIOD_CODR = (1<<HALLBUPPER) | (1<<HALLCLOWER) | (1<<HALLAUPPER) | (1<<HALLBLOWER);
-			//|float|-|+|
+			//Need Cupper, Clower, and Alower to be PWM
+			REG_PIOD_ABCDSR1 |= (1<<W_UPPER_OUTPUT) | (1<<W_LOWER_OUTPUT) | (1<<U_LOWER_OUTPUT);
+			REG_PIOD_PER |= (1<<U_UPPER_OUTPUT) | (1<<V_UPPER_OUTPUT) | (1<<V_LOWER_OUTPUT);
+			REG_PIOD_PDR |= (1<<W_UPPER_OUTPUT) | (1<<W_LOWER_OUTPUT) | (1<<U_LOWER_OUTPUT);
+			
+			//Disable PWM because polarity needs to be adjusted
+			REG_PWM_DIS |= PWM_DIS_CHID0;
+			//Set needed polarities. Setting all of them so I don't need to keep track.
+			REG_PWM_CMR0 &= ~(PWM_CMR_CPOL);
+			REG_PWM_CMR1 &= ~(PWM_CMR_CPOL);
+			REG_PWM_CMR2 |= (PWM_CMR_CPOL);
+			//Now, set the duty cycle to be pretty low, probs 15%.
+			REG_PWM_CDTY0 = 720;
+			REG_PWM_CDTY1 = 720;
+			REG_PWM_CDTY2 = 720;
+			//REG_PWM_SCUC = PWM_SCUC_UPDULOCK;	
+			//Enable PWM
+			REG_PWM_ENA |= PWM_ENA_CHID0;		
+			
+			//REG_PIOD_SODR = (1<<A_LOWER_OUTPUT) | (1<<C_UPPER_OUTPUT);
+			REG_PIOD_CODR = (1<<V_UPPER_OUTPUT) | (1<<U_UPPER_OUTPUT) | (1<<V_LOWER_OUTPUT);
+			//|-|float|+|
 		}else
 		{
 			
-			REG_PIOD_SODR = (1<<HALLBLOWER) | (1<<HALLCLOWER) | (1<<HALLALOWER);
-			REG_PIOD_CODR = (1<<HALLAUPPER) | (1<<HALLBUPPER) | (1<<HALLCUPPER);
+			REG_PIOD_SODR = (1<<V_LOWER_OUTPUT) | (1<<W_LOWER_OUTPUT) | (1<<U_LOWER_OUTPUT);
+			REG_PIOD_CODR = (1<<U_UPPER_OUTPUT) | (1<<V_UPPER_OUTPUT) | (1<<W_UPPER_OUTPUT);
 		}
 	}else if (Direction > 2)
 	{
-			REG_PIOD_SODR = (1<<HALLBLOWER) | (1<<HALLCLOWER) | (1<<HALLALOWER);
-			REG_PIOD_CODR = (1<<HALLAUPPER) | (1<<HALLBUPPER) | (1<<HALLCUPPER);
+			REG_PIOD_SODR = (1<<V_LOWER_OUTPUT) | (1<<W_LOWER_OUTPUT) | (1<<U_LOWER_OUTPUT);
+			REG_PIOD_CODR = (1<<U_UPPER_OUTPUT) | (1<<V_UPPER_OUTPUT) | (1<<W_UPPER_OUTPUT);
 	}else
 	{
-			REG_PIOD_SODR = (1<<HALLBLOWER) | (1<<HALLCLOWER) | (1<<HALLALOWER);
-			REG_PIOD_CODR = (1<<HALLAUPPER) | (1<<HALLBUPPER) | (1<<HALLCUPPER);
+			REG_PIOD_SODR = (1<<V_LOWER_OUTPUT) | (1<<W_LOWER_OUTPUT) | (1<<U_LOWER_OUTPUT);
+			REG_PIOD_CODR = (1<<U_UPPER_OUTPUT) | (1<<V_UPPER_OUTPUT) | (1<<W_UPPER_OUTPUT);
 	}
 	
 	//Wait some more
