@@ -11,4 +11,6 @@ uint32_t QDECGetPositionTotal(void);
 //Returns encoder position within a single revoltion
 uint32_t QDECGetPostionSingle(void);
 
+void QDECSetup(void);
+
 #endif

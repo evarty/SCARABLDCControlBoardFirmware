@@ -19,12 +19,46 @@
 #define ENCODERRESOLUTION 2000
 #define PWMMAXVALUE 4800
 
-#define HALLAUPPER 24
-#define HALLALOWER 20
-#define HALLBUPPER 25
-#define HALLBLOWER 21
-#define HALLCUPPER 26
-#define HALLCLOWER 22
+#define HALL_U_PIN 30
+#define HALL_U_PORT 3//D
+#define HALL_V_PIN 7
+#define HALL_V_PORT 0//A
+#define HALL_W_PIN 8
+#define HALL_W_PORT 0//A
+
+
+#define U_UPPER_OUTPUT_PIN 20//PWM channel 0
+#define U_UPPER_OUTPUT_PORT 3//D
+
+#define U_LOWER_OUTPUT_PIN 24
+#define U_LOWER_OUTPUT_PORT 3//D
+
+#define V_UPPER_OUTPUT_PIN 21//PWM channel 1
+#define V_UPPER_OUTPUT_PORT 3//D
+
+#define V_LOWER_OUTPUT_PIN 25
+#define V_LOWER_OUTPUT_PORT 3//D
+
+#define W_UPPER_OUTPUT_PIN 22//PWM channel 2
+#define W_UPPER_OUTPUT_PORT 3//D
+
+#define W_LOWER_OUTPUT_PIN 26
+#define W_LOWER_OUTPUT_PORT 3//D
+
+#define DIR_INPUT 0
+#define DIR_OUTPUT 1
+
+#define PORTA 0
+#define PORTB 1
+#define PORTC 2
+#define PORTD 3
+
+#define STATE_OFF 0
+#define STATE_ON 1
+
+#define SETDPIN(a) (REG_PIOD_SODR |= (1 << a))
+#define CLEARDPIN(a) (REG_PIOD_CODR |= (1<<a))
+
 
 
 //The provided Atmel headers have a weird error/omission regarding the PIO_ABCDSR registers.
@@ -38,119 +72,20 @@
 int main(void)
 {
     /* Initialize the SAM system */
-    SystemInit();
+    //SystemInit();
 	
+	ClockSetup();
+	
+	PIOSetup();
+	
+	PWMSetup();
+	
+	QDECSetup();
 
+/*	
 	
-	//Set up Crystal and main clock
-	//This will occur only on startup, so speed is not a priority.
-	//Following Process from datasheet section 29.15 Programming Sequence
-	//Write protection starts as 0, so no need to deal with that 
-	//Enable crystal oscillator
-	REG_CKGR_MOR |= CKGR_MOR_KEY(0x37) | CKGR_MOR_MOSCXTEN;
-	//Wait for MOSCXTST field in PMC_SR to be set
-	while(!(REG_PMC_SR & PMC_SR_MOSCXTS));
-	//Switch the main clock to the external crystal
-	REG_CKGR_MOR |= CKGR_MOR_KEY(0x37) | CKGR_MOR_MOSCSEL;
-	//Wait for MOSCELS bit to be set the PMC_SR register
-	while(!(REG_PMC_SR & PMC_SR_MOSCSELS));
-	//Check the clock frequency
-	//Wait for check to be available
-	while(!(REG_CKGR_MCFR & CKGR_MCFR_MAINFRDY));
-	/*
-	Check if the crystal is doing anything, 
-	in particular, if it is close to the correct frequency,
-	If not, revert to internal oscillator.
-	The default slow clock is 4 MHz. The crystal in the design
-	is 12 MHz. Reading from MAINF gives the number of crystal cycles
-	in 16 slow clock cycles. The crystal is three times
-	as fast as the slow clock. So, 16*3 = 48.
-	*/
-	uint32_t MainFrequencyCheckVariable = 0x0u;
-	MainFrequencyCheckVariable = REG_CKGR_MCFR & CKGR_MCFR_MAINF_Msk;
-	if(MainFrequencyCheckVariable<5800)
-	{
-		REG_CKGR_MOR &= ~(CKGR_MOR_MOSCSEL);
-		return 1;
-	}
-	//At this point, the crystal is working and the main clock source
-	//but I want a faster clock, so, break out the PLL
-	
-	//Setup PLL
-	//Write the count register for the PLL setup time
-	//Set PLL multiplier. multiplication value is this value + 1
-	REG_CKGR_PLLAR = CKGR_PLLAR_PLLACOUNT(0x03F) | CKGR_PLLAR_MULA(0x019) | CKGR_PLLAR_DIVA(0x01) | (1<<29);
-	//Wait for the LOCKA bit to be set
-	while(!(REG_PMC_SR & PMC_SR_LOCKA));
-	//Select the PLL as master clock, following datasheet
-	REG_PMC_MCKR |= PMC_MCKR_PRES_CLK_1;
-	while(!(REG_PMC_SR & PMC_SR_MCKRDY));
-	REG_PMC_MCKR |= PMC_MCKR_CSS_PLLA_CLK;
-	while(!(REG_PMC_SR & PMC_SR_MCKRDY));
-	//At this point the master clock is the PLL
-	//which is (9 + 1)*12 MHz = 120 MHz.
-	while(!(REG_CKGR_MCFR & CKGR_MCFR_MAINFRDY));
-	/*
-	MainFrequencyCheckVariable = REG_CKGR_MCFR & CKGR_MCFR_MAINF_Msk;
-	if(MainFrequencyCheckVariable < 58000)
-	{
-		REG_CKGR_MOR &= ~(CKGR_MOR_MOSCSEL);
-		return 1;
-	}
-	*/
-	
-	//Setup PIO
-	//Disable PIO write protection
-	REG_PIOA_WPMR = AFE_WPMR_WPKEY(0x50494F) | (0<<0);
-	//The encoder inputs are given to peripherals, so they are fine.
-	//The hall effect inputs need to be configured.
-	//Turn on PIO clock for all ?channels? I guess
-	REG_PMC_PCER0 |= PMC_PCER0_PID9 | PMC_PCER0_PID10 | PMC_PCER0_PID11 | PMC_PCER0_PID12 | PMC_PCER0_PID13;
-	//Set relevant pins to be inputs
-	//THESE ARE PLACEHOLDER VALUES.
-	//enable PIO control
-	REG_PIOA_PER |= PIO_PER_P0 | PIO_PER_P1 | PIO_PER_P2;
-	//Disable output
-	REG_PIOA_ODR |= PIO_ODR_P0 | PIO_ODR_P1 | PIO_ODR_P2;
-	//Disable pullup resistors
-	REG_PIOA_PUDR |= PIO_PUDR_P0 | PIO_PUDR_P1 | PIO_PUDR_P2;
-	//Disable pulldown resistors
-	REG_PIOA_PPDDR |= PIO_PPDDR_P0 | PIO_PPDDR_P1 | PIO_PPDDR_P2;
-	
-
 	//Disable PMC write protection
 	REG_PMC_WPMR = PMC_WPMR_WPKEY(0x504D43) | (0<<0);
-	
-	
-	//Setup the quadrature decoder
-	//TIOA0 and TIOB0 are the quadrature signals.
-	//TIOB1 is the index signal.
-	//This follows AT42706 process in section 5.2.4
-	//Configure IO pins to their peripheral functions
-	REG_PIOA_PDR |= PIO_PER_P0 | PIO_PER_P1 | PIO_PER_P16;
-	REG_PIOA_ABCDSR1 |=  PIO_ABCDSR_P0 | PIO_ABCDSR_P1 | PIO_ABCDSR_P16;
-	//Enable channel 0 and 1 peripheral clocks
-	//CURRENT CODE ENABLES MODULE 0
-	REG_PMC_PCER0 |= PMC_PCER0_PID21 | PMC_PCER0_PID22;
-	//Step 3
-	REG_TC0_CMR0 &= ~(TC_CMR_WAVE);
-	REG_TC0_CMR1 &= ~(TC_CMR_WAVE);
-	
-	REG_TC0_CMR0 |= TC_CMR_TCCLKS_XC0;
-	REG_TC0_CMR1 |= TC_CMR_TCCLKS_XC0;
-	
-	REG_TC0_CMR0 |= TC_CMR_ETRGEDG_RISING;
-	REG_TC0_CMR1 |= TC_CMR_ETRGEDG_RISING;
-	
-	REG_TC0_CMR0 |= TC_CMR_ABETRG;
-	REG_TC0_CMR1 |= TC_CMR_ABETRG;
-	
-	//Step 4
-	REG_TC0_BMR |= TC_BMR_QDEN | TC_BMR_POSEN | TC_BMR_EDGPHA | TC_BMR_MAXFILT(1);
-	//Step 5. Start TC0 and TC1
-	REG_TC0_CCR0 |= TC_CCR_CLKEN;
-	REG_TC0_CCR1 |= TC_CCR_CLKEN;
-	//The QDEC using channels 0 and 1 of TC0 is enabled and configured.
 	
 	
 	//Set up the ADC
@@ -214,9 +149,9 @@ int main(void)
 	float ParkCurrentError[2] = {0,0};
 	uint32_t SVPWMOutputValues[4];
 	uint32_t HasBeenIndex = 0;
-	uint32_t HallA = 0;
-	uint32_t HallB = 0;
-	uint32_t HallC = 0;
+	uint32_t HallU = 0;
+	uint32_t HallV = 0;
+	uint32_t HallW = 0;
 	
 	
 	//Construct arrays of sine and cosine values. Memory heavy (like a quarter of the RAM), but should increase runtime speed.
@@ -249,81 +184,157 @@ int main(void)
 	REG_PIOD_CODR = (1<<HALLAUPPER) | (1<<HALLBUPPER) | (1<<HALLCUPPER);	
 	
 	PWMSetup();
-	/*
-	//Set up PWM
-	//Need to do PIO stuff for PWM enabling and activate the peripheral clock
-	//Give the relevant pins to the PWM peripheral. (PIO stuff)
-	//Commenting out because this will be dealt with in the six step commutation bit. Then again later when FOC boots up.
-	REG_PIOD_ABCDSR1 |= (0<<20) | (0<<21) | (0<<22) | (0<<24) | (0<<25) | (0<<26);
-	REG_PIOD_PDR = 0;
-	//Active the PWM clocks (PMC stuff)
-	REG_PMC_PCER1 |= PMC_PCER1_PID36;
-	REG_PMC_PCER0 | PMC_PCER0_PID21 | PMC_PCER0_PID22 | PMC_PCER0_PID23;
-	//Following steps in the datasheet 39.6.5.1
-	//Disable write protection of PWM registers
-	REG_PWM_WPCR = PWM_WPCR_WPKEY(0x50574D) | PWM_WPCR_WPCMD(0x0);
-	//Configure clock generator
-	//Select CLKA clock. Set PREA clock to be the peripheral clock
-	//Don't actually need this
-	REG_PWM_CLK |= PWM_CLK_DIVA(1) | PWM_CLK_PREA(0);
-	//Enable PWM output
-	REG_PWM_ENA = PWM_ENA_CHID0 | PWM_ENA_CHID1 | PWM_ENA_CHID2;
-	//Select the clock for each channel. Will use CLKA dealt with just above.
-	//Also set the alignment, polarity, deadtime, update type, event selection
-	//Set for no deadtime, the FET driver will take care of that.
-	//Register starts at zero, so CPOL bit doesn't need to change. CES also should be 0.
-	//Probably don't need to set up 1 and 2, since I'm going to sync them, but oh well
-	REG_PWM_CMR0 |= PWM_CMR_CPRE_MCK | PWM_CMR_CALG;
-	REG_PWM_CMR1 |= PWM_CMR_CPRE_MCK | PWM_CMR_CALG;
-	REG_PWM_CMR2 |= PWM_CMR_CPRE_MCK | PWM_CMR_CALG;
-	//Set period of PWM
-	//At 24 V, 4800 give me a resolution of 5 mV
-	//I am going to assert this is enough
-	REG_PWM_CPRDUPD0 = PWMMAXVALUE;
-	REG_PWM_CPRDUPD1 = PWMMAXVALUE;
-	REG_PWM_CPRDUPD2 = PWMMAXVALUE;
-	//Init the duty cycle at 0
-	REG_PWM_CDTYUPD0 = 0;
-	REG_PWM_CDTYUPD1 = 2400;
-	REG_PWM_CDTYUPD2 = 2400;
-	//Sync channels 1 and 2 to channel 0
-	//Also set update method. Default is manual update, so that's fine
-	REG_PWM_SCM |= PWM_SCM_SYNC0 | PWM_SCM_SYNC1 | PWM_SCM_SYNC2;
-	//Update control registers
-	REG_PWM_SCUC |= (1<<0);
-	//Enable the interrupt channels. Might need them
-	//REG_PWM_ENA |= PWM_ENA_CHID0 | PWM_ENA_CHID1 | PWM_ENA_CHID2;
+*/
 	
-	*/
+	
 	
 		//This is the loop that will run when the motor just boots up.
 		//It has not yet caught the index, so the vector control won't work yet
 		//This loop just runs the motor very slowly using 6 step commutation using the Hall sensors
-		//Set output pins to be output
-		//REG_PIOD_PER |= PIO_PER_P20 | PIO_PER_P21 | PIO_PER_P22 | PIO_PER_P24 | PIO_PER_P25 | PIO_PER_P26;
-		//REG_PIOD_OER |= PIO_OER_P20 | PIO_OER_P21 | PIO_OER_P22 | PIO_OER_P24 | PIO_OER_P25 | PIO_OER_P26;
-		//Set the Hall  Pins to be inputs. See diagram.
-		//HallA is connected to PD30.
-		//HallB is connected to PA07.
-		//HallC is connected to PA08.
-	/*
-		REG_PIOD_PER |= PIO_PER_P30;
-		REG_PIOA_PER |= PIO_PER_P7 | PIO_PER_P8;
-		REG_PIOD_ODR |= PIO_ODR_P30;
-		REG_PIOA_ODR |= PIO_ODR_P7 | PIO_ODR_P8;
-		*/
+
+		uint32_t HallU = 0;
+		uint32_t HallV = 0;
+		uint32_t HallW = 0;
+		
+		//uint32_t IndexCount = 0;
+		volatile int32_t SingleRotationPosition = 0;
+		volatile int32_t EncoderPosition = 0;
+		volatile int32_t Direction = 0;
+		
+
+		
+	
+		//Set the Hall input pins to be inputs
+		EnablePIOControl(HALL_U_PORT, HALL_U_PIN);
+		EnablePIOControl(HALL_V_PORT, HALL_V_PIN);
+		EnablePIOControl(HALL_W_PORT, HALL_W_PIN);
+		SetPinIODirection(HALL_U_PORT, HALL_U_PIN, DIR_INPUT);
+		SetPinIODirection(HALL_V_PORT, HALL_V_PIN, DIR_INPUT);
+		SetPinIODirection(HALL_W_PORT, HALL_W_PIN, DIR_INPUT);
+
+		//Set the Output pins to be outputs. This works for six step commutation. will have to be adjusted for space vector control later on.
+		//First give them to the PIO
+		EnablePIOControl(U_UPPER_OUTPUT_PORT, U_UPPER_OUTPUT_PIN);
+		EnablePIOControl(U_LOWER_OUTPUT_PORT, U_LOWER_OUTPUT_PIN);
+		EnablePIOControl(V_UPPER_OUTPUT_PORT, V_UPPER_OUTPUT_PIN);
+		EnablePIOControl(V_LOWER_OUTPUT_PORT, V_LOWER_OUTPUT_PIN);
+		EnablePIOControl(W_UPPER_OUTPUT_PORT, W_UPPER_OUTPUT_PIN);
+		EnablePIOControl(W_LOWER_OUTPUT_PORT, W_LOWER_OUTPUT_PIN);
+		
+		//Then set them as outputs.
+		SetPinIODirection(U_UPPER_OUTPUT_PORT, U_UPPER_OUTPUT_PIN, DIR_OUTPUT);
+		SetPinIODirection(U_LOWER_OUTPUT_PORT, U_LOWER_OUTPUT_PIN, DIR_OUTPUT);
+		SetPinIODirection(V_UPPER_OUTPUT_PORT, V_UPPER_OUTPUT_PIN, DIR_OUTPUT);
+		SetPinIODirection(V_LOWER_OUTPUT_PORT, V_LOWER_OUTPUT_PIN, DIR_OUTPUT);
+		SetPinIODirection(W_UPPER_OUTPUT_PORT, W_UPPER_OUTPUT_PIN, DIR_OUTPUT);
+		SetPinIODirection(W_LOWER_OUTPUT_PORT, W_LOWER_OUTPUT_PIN, DIR_OUTPUT);
+		
 		while (1)//!HasBeenIndex)
 		{
 			//Measure the Hall sensor outputs
-			HallA = (REG_PIOD_PDSR & PIO_PDSR_P30);
-			HallB = (REG_PIOA_PDSR & PIO_PDSR_P7);
-			HallC = (REG_PIOA_PDSR & PIO_PDSR_P8);
+			HallU = ReadIOPinValue(HALL_U_PORT, HALL_U_PIN);
+			HallV = ReadIOPinValue(HALL_V_PORT, HALL_V_PIN);
+			HallW = ReadIOPinValue(HALL_W_PORT, HALL_W_PIN);
+			
+			//Read position from encoder
+			SingleRotationPosition = QDECGetPostionSingle();
+			EncoderPosition = QDECGetPositionTotal();
+			Direction = QDECGetDirection();
+			
+
+			
 
 			//Energize the windings in accordance with simple six step commutation
-			//if(REG_PIOD_ODSR & PIO_ODSR_P24){
+			//SixStepCommutation(2550,1,0,HallU,HallV,HallW);
+			
+			/*
+			//PWM Test
+			//Set PWM control of all output pins
+			//Since the outputs are all on PORTD, and the ABCDSR registers default to 0x0 and 0x0, they default to the PWM
+			//So, don't need to do anything
+			DisablePIOControl(U_UPPER_OUTPUT_PORT, U_UPPER_OUTPUT_PIN);
+			DisablePIOControl(U_LOWER_OUTPUT_PORT, U_LOWER_OUTPUT_PIN);
+			DisablePIOControl(V_UPPER_OUTPUT_PORT, V_UPPER_OUTPUT_PIN);
+			DisablePIOControl(V_LOWER_OUTPUT_PORT, V_LOWER_OUTPUT_PIN);
+			DisablePIOControl(W_UPPER_OUTPUT_PORT, W_UPPER_OUTPUT_PIN);
+			DisablePIOControl(W_LOWER_OUTPUT_PORT, W_LOWER_OUTPUT_PIN);
+			//Set the PWM duty cycle to something
+			//remember max is 4800
+			//REG_PWM_CDTY0 = 1000;
+			//REG_PWM_CDTY1 = 2000;
+			//REG_PWM_CDTY2 = 3000;
+			uint32_t hold[] = {200,200,200};//,1,1,0};
+			uint32_t hold2[] = {2000,2000,2000};//,1,1,0};
+			UpdateOutputPWMDutyCycles(hold);//AndPolarities(hold);
+			for (volatile uint32_t i = 0; i < 2550; i++)
+			{
+			}
+			UpdateOutputPWMDutyCycles(hold2);//AndPolarities(hold2);
+			for (volatile uint32_t i = 0; i < 2550; i++)
+			{
+			}
+			*/
 			
 			
-			SixStepCommutation(80,6,0,HallA,HallB,HallC);
+			
+			/*
+			if(HallU >= 0){
+			SetPinIOOutputValue(U_UPPER_OUTPUT_PORT, U_UPPER_OUTPUT_PIN, STATE_ON);
+			SetPinIOOutputValue(U_LOWER_OUTPUT_PORT, U_LOWER_OUTPUT_PIN, STATE_ON);
+			SetPinIOOutputValue(V_UPPER_OUTPUT_PORT, V_UPPER_OUTPUT_PIN, STATE_ON);
+			SetPinIOOutputValue(V_LOWER_OUTPUT_PORT, V_LOWER_OUTPUT_PIN, STATE_ON);
+			SetPinIOOutputValue(W_UPPER_OUTPUT_PORT, W_UPPER_OUTPUT_PIN, STATE_ON);
+			SetPinIOOutputValue(W_LOWER_OUTPUT_PORT, W_LOWER_OUTPUT_PIN, STATE_ON);
+			
+			for (volatile uint32_t i = 0; i < 1; i++)
+			{
+			}
+
+			
+			SetPinIOOutputValue(U_UPPER_OUTPUT_PORT, U_UPPER_OUTPUT_PIN, STATE_OFF);
+			SetPinIOOutputValue(U_LOWER_OUTPUT_PORT, U_LOWER_OUTPUT_PIN, STATE_OFF);
+			SetPinIOOutputValue(V_UPPER_OUTPUT_PORT, V_UPPER_OUTPUT_PIN, STATE_OFF);
+			SetPinIOOutputValue(V_LOWER_OUTPUT_PORT, V_LOWER_OUTPUT_PIN, STATE_OFF);
+			SetPinIOOutputValue(W_UPPER_OUTPUT_PORT, W_UPPER_OUTPUT_PIN, STATE_OFF);
+			SetPinIOOutputValue(W_LOWER_OUTPUT_PORT, W_LOWER_OUTPUT_PIN, STATE_OFF);
+			
+			for (volatile uint32_t i = 0; i < 1; i++)
+			{
+			}
+
+			}
+			
+			*/
+			
+			/*
+			REG_PIOD_ABCDSR1 |= (1<<V_UPPER_OUTPUT) | (1<<V_LOWER_OUTPUT) | (1<<W_LOWER_OUTPUT);
+			REG_PIOD_PDR |= (1<<U_UPPER_OUTPUT) | (1<<U_LOWER_OUTPUT) | (1<<W_UPPER_OUTPUT);
+			REG_PIOD_PER |= (1<<V_UPPER_OUTPUT) | (1<<V_LOWER_OUTPUT) | (1<<W_LOWER_OUTPUT);
+			
+			//Disable PWM because polarity needs to be adjusted
+			REG_PWM_DIS |= PWM_DIS_CHID0;
+			//Set needed polarities. Setting all of them so I don't need to keep track.
+			REG_PWM_CMR0 &= ~(PWM_CMR_CPOL);
+			REG_PWM_CMR1 |= (PWM_CMR_CPOL);
+			REG_PWM_CMR2 &= ~(PWM_CMR_CPOL);
+			//Now, set the duty cycle to be pretty low, probs 15%.
+			REG_PWM_CDTY0 = 00;//720;
+			REG_PWM_CDTY1 = 00;//720;
+			REG_PWM_CDTY2 = 00;//720;
+			//REG_PWM_SCUC = PWM_SCUC_UPDULOCK;
+			//Enable PWM
+			REG_PWM_ENA |= PWM_ENA_CHID0;
+			
+			//REG_PIOD_SODR = (1<<C_LOWER_OUTPUT) | (1<<B_UPPER_OUTPUT);
+			REG_PIOD_CODR = (1<<U_UPPER_OUTPUT) | (1<<W_UPPER_OUTPUT) | (1<<U_LOWER_OUTPUT);
+			//|float|+|-|
+			*/
+			
+			
+			
+			
+			
+			
 			
 			
 			//}
@@ -342,6 +353,7 @@ int main(void)
 	
 
     /* Replace with your application code */
+/*
     while (1) 
     {
 				
@@ -388,4 +400,5 @@ int main(void)
 		SVPWMBase(SVPWMOutputValues, ClarkVoltageCommand[0], ClarkVoltageCommand[1], PWMMAXVALUE);
 		
     }
+*/
 }

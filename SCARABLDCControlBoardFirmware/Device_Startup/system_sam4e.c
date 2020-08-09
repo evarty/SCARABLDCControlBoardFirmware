@@ -55,8 +55,8 @@ uint32_t SystemCoreClock = CHIP_FREQ_MAINCK_RC_4MHZ;
  */
 void SystemInit( void )
 {
-	/* Set FWS according to SYS_BOARD_MCKR configuration */
-	EFC->EEFC_FMR = EEFC_FMR_FWS(5);
+	/* Set FWS according to SYS_BOARD_MCKR configuration*/
+	EFC->EEFC_FMR = EEFC_FMR_FWS(5); 
 
 
 	/* Initialize main oscillator */
