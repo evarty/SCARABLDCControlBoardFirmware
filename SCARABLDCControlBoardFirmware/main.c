@@ -192,6 +192,7 @@ int main(void)
 		//It has not yet caught the index, so the vector control won't work yet
 		//This loop just runs the motor very slowly using 6 step commutation using the Hall sensors
 
+		//Init Hall sensor variables to 0
 		uint32_t HallU = 0;
 		uint32_t HallV = 0;
 		uint32_t HallW = 0;
@@ -220,7 +221,6 @@ int main(void)
 		EnablePIOControl(V_LOWER_OUTPUT_PORT, V_LOWER_OUTPUT_PIN);
 		EnablePIOControl(W_UPPER_OUTPUT_PORT, W_UPPER_OUTPUT_PIN);
 		EnablePIOControl(W_LOWER_OUTPUT_PORT, W_LOWER_OUTPUT_PIN);
-		
 		//Then set them as outputs.
 		SetPinIODirection(U_UPPER_OUTPUT_PORT, U_UPPER_OUTPUT_PIN, DIR_OUTPUT);
 		SetPinIODirection(U_LOWER_OUTPUT_PORT, U_LOWER_OUTPUT_PIN, DIR_OUTPUT);
